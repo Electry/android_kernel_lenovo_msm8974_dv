@@ -1,0 +1,20 @@
+--- drivers/input/touchscreen/s3408/synaptics_dsx_fw_update.c
++++ drivers/input/touchscreen/s3408/synaptics_dsx_fw_update.c
+@@ -1375,7 +1375,7 @@
+ 	SYNAP_DEBUG("VENDOR ID ADDR:%x,vendor id is %d,use vendor_id",fwu->f01_fd.query_base_addr + VENDOR_ID_OFFSET,vendor_id);	
+    	config_id[0] = vendor_id;	   
+    }
+-   
++  /* 
+ 		switch(config_id[0]){
+ 			case 1:			
+ 		SYNAP_DEBUG("fwu omfilm++++++++");
+@@ -1410,7 +1410,7 @@
+ 				retval = -EINVAL;
+ 				goto exit;
+ 		}
+-		
++	*/	
+ #define FW_IMAGE_BIEL_D2B "k6_biel_d2b.img"
+ #define FW_IMAGE_LAIBAO "k6_laibao.img"
+ #define FW_IMAGE_OFILM "k6_ofilm.img"
