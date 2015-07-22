@@ -9,7 +9,7 @@
 # Path variables
 #
 TOOLS_PATH=~/bin
-TOOLCHAIN_PATH=~/android/toolchains/arm-cortex_a15-linux-gnueabihf-linaro_4.9.4/bin/arm-eabi-
+TOOLCHAIN_PATH=~/android/toolchains/google-prebuilts-linux_x86-arm-eabi-4.8/bin/arm-eabi-
 
 BOOT_PATH=arch/arm/boot
 BOOTFILES_PATH=bootfiles
