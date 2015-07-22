@@ -452,7 +452,7 @@ static inline void kgsl_regread(struct kgsl_device *device,
 	device->ftbl->regread(device, offsetwords, value);
 }
 
-static inline void kgsl_regwrite(struct kgsl_device *device,
+inline void kgsl_regwrite(struct kgsl_device *device,
 				 unsigned int offsetwords,
 				 unsigned int value)
 {

@@ -583,7 +583,7 @@ static inline int adreno_is_a2xx(struct adreno_device *adreno_dev)
 	return (adreno_dev->gpurev <= 299);
 }
 
-static inline int adreno_is_a3xx(struct adreno_device *adreno_dev)
+inline int adreno_is_a3xx(struct adreno_device *adreno_dev)
 {
 	return (adreno_dev->gpurev >= 300);
 }
@@ -741,7 +741,7 @@ static inline int adreno_add_read_cmds(struct kgsl_device *device,
  * @adreno_dev - Pointer to device structure
  * @cmds - Pointer to memory where idle commands need to be added
  */
-static inline int adreno_add_idle_cmds(struct adreno_device *adreno_dev,
+inline int adreno_add_idle_cmds(struct adreno_device *adreno_dev,
 							unsigned int *cmds)
 {
 	unsigned int *start = cmds;
@@ -783,7 +783,7 @@ static inline int adreno_wait_reg_eq(unsigned int *cmds, unsigned int addr,
  * @adreno_dev:		Pointer to adreno device
  * @offset_name:	The register enum that is checked
  */
-static inline bool adreno_checkreg_off(struct adreno_device *adreno_dev,
+inline bool adreno_checkreg_off(struct adreno_device *adreno_dev,
 					enum adreno_regs offset_name)
 {
 	if (offset_name >= ADRENO_REG_REGISTER_MAX ||
@@ -818,7 +818,7 @@ static inline void adreno_readreg(struct adreno_device *adreno_dev,
  * @offset_name:	The register enum that is to be written
  * @val:		Value to write
  */
-static inline void adreno_writereg(struct adreno_device *adreno_dev,
+inline void adreno_writereg(struct adreno_device *adreno_dev,
 				enum adreno_regs offset_name, unsigned int val)
 {
 	struct kgsl_device *device = &adreno_dev->dev;
