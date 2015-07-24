@@ -35,8 +35,8 @@ function MakeClean() {
 }
 
 function KingdomRowConfig() {
-	echo -e $COLOR">> Writing .config according to kingdom_row_defconfig"$DEFCOLOR
-	make kingdom_row_defconfig
+	echo -e $COLOR">> Writing .config according to dragonvibe_defconfig"$DEFCOLOR
+	make dragonvibe_defconfig
 }
 
 function MakeKernel() {
