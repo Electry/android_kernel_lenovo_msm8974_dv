@@ -139,10 +139,13 @@ service qseecomd /system/bin/qseecomd
    user root
    group root
 
-service mpdecision /system/bin/mpdecision --avg_comp
-   class main
-   user root
-   disabled
+#
+# MP-Decision disabled
+#
+# service mpdecision /system/bin/mpdecision --avg_comp
+#    class main
+#    user root
+#    disabled
 
 service qosmgrd /system/bin/qosmgr /system/etc/qosmgr_rules.xml
    user system
