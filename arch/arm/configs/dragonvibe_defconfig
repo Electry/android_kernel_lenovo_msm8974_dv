@@ -681,6 +681,11 @@ CONFIG_CMDLINE=""
 #
 
 #
+# CPU Hot-plugging
+#
+CONFIG_INTELLI_PLUG=y
+
+#
 # CPU Frequency scaling
 #
 CONFIG_CPU_FREQ=y
