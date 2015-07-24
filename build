@@ -9,7 +9,7 @@
 # Path variables
 #
 TOOLS_PATH=~/bin
-TOOLCHAIN_PATH=~/android/toolchains/google-prebuilts-linux_x86-arm-eabi-4.8/bin/arm-eabi-
+TOOLCHAIN_PATH=~/android/toolchains/arm-cortex_a15-linux-gnueabihf-linaro_4.8.4/bin/arm-eabi-
 
 BOOT_PATH=arch/arm/boot
 BOOTFILES_PATH=bootfiles
@@ -123,7 +123,7 @@ read -p "(F = fast, D = kernel debug):" ANSWER
 		MakeKernel
 		MakeBoot
 		CopyModules
-		echo $COLOR">> Finished!"$DEFCOLOR
+		echo -e $COLOR">> Finished!"$DEFCOLOR
 		;;
 
 		d*|D*)
@@ -137,11 +137,11 @@ read -p "(F = fast, D = kernel debug):" ANSWER
 				MakeBoot
 				;;
 			esac
-		echo $COLOR">> Finished!"$DEFCOLOR
+		echo -e $COLOR">> Finished!"$DEFCOLOR
 		;;
 
 		*)
-		echo $COLOR">> Exiting..."$DEFCOLOR
+		echo -e $COLOR">> Exiting..."$DEFCOLOR
 		;;
 	esac
 
