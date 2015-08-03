@@ -34,6 +34,15 @@ modules.builtin
 *.gcno
 
 #
+# Temporary output files
+#
+/bootfiles/kernel
+/bootfiles/dt.img
+/bootfiles/boot.img
+/bootfiles/ramdisk.packed
+/output
+
+#
 # Top-level generic files
 #
 /tags
