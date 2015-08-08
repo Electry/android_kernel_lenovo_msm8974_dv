@@ -30,11 +30,12 @@
 
 #define ELE_PLUG			"ele_plug"
 #define ELE_PLUG_MAJOR_VERSION		1
-#define ELE_PLUG_MINOR_VERSION		0
+#define ELE_PLUG_MINOR_VERSION		1
 
 #define ELE_PLUG_ENABLED		1
 #undef ELE_PLUG_DEBUG
 
+#define DEFAULT_ALIVE_THRESHOLD		10
 #define DEFAULT_PLUSONE_THRESHOLD	25
 #define DEFAULT_PLUSTWO_THRESHOLD	50
 #define DEFAULT_PLUSTHREE_THRESHOLD	80
@@ -43,16 +44,14 @@
 #define DEFAULT_MIN_CPU_ONLINE_COUNTER	10
 
 /* Careful with this value */
-#define DEFAULT_TIMER			1
+#define DEFAULT_TIMER			250
 
 extern unsigned int get_rq_info(void);
 
 struct cpu_stats {
 	unsigned int counter;
-	u64 timestamp;
 } stats = {
 	.counter = 0,
-	.timestamp = 0,
 };
 
 struct hotplug_tunables {
@@ -60,6 +59,12 @@ struct hotplug_tunables {
 	 * Enable/Disable Hotplug Work
 	 */
 	unsigned int enabled;
+
+	/*
+	 * system load threshold to decide when no un/plugging is needed
+	 * (from 0 to 100)
+	 */
+	unsigned int alive_threshold;
 
 	/*
 	 * system load threshold to decide when online or offline one core
@@ -92,7 +97,7 @@ struct hotplug_tunables {
 	unsigned int cpufreq_unplug_limit;
 
 	/*
-	 * sample timer in seconds. The default value of 1 equals to 10
+	 * sample timer in miliseconds. The default value of 250 equals to 4
 	 * samples every second. The higher the value the less samples
 	 * per second it runs
 	 */
@@ -197,7 +202,8 @@ static void __ref decide_hotplug_func(struct work_struct *work)
 	} else if (cur_load >= t->plusone_threshold) {
 		if (online_cpus < 4)
 			cpu_plug(1);
-	} else {
+
+	} else if (cur_load < t->alive_threshold) {
 		if (online_cpus > 1 && !cpus_freq_overlimit() && stats.counter > t->min_cpu_online_counter) {
 			if (online_cpus <= 2) //Last unplug -> reset counter
 				stats.counter = 0;
@@ -208,7 +214,7 @@ static void __ref decide_hotplug_func(struct work_struct *work)
 
 	if (t->enabled)
 		queue_delayed_work(wq, &decide_hotplug,
-			msecs_to_jiffies(t->timer * HZ));
+			msecs_to_jiffies(t->timer));
 
 	return;
 }
@@ -246,6 +252,30 @@ static ssize_t enabled_store(struct device *dev, struct device_attribute *attr,
 		cancel_delayed_work_sync(&decide_hotplug);
 	}
 	t->enabled = new_val > 1 ? 1 : 0;
+	return size;
+}
+
+static ssize_t alive_threshold_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct hotplug_tunables *t = &tunables;
+
+	return snprintf(buf, 10, "%u\n", t->alive_threshold);
+}
+
+static ssize_t alive_threshold_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct hotplug_tunables *t = &tunables;
+	int ret;
+	unsigned long new_val;
+
+	ret = kstrtoul(buf, 0, &new_val);
+	if (ret < 0)
+		return ret;
+
+	t->alive_threshold = new_val > 100 ? 100 : new_val;
+
 	return size;
 }
 
@@ -395,6 +425,8 @@ static ssize_t timer_store(struct device *dev, struct device_attribute *attr,
 }
 
 static DEVICE_ATTR(enabled, 0664, enabled_show, enabled_store);
+static DEVICE_ATTR(alive_threshold, 0664, alive_threshold_show,
+		alive_threshold_store);
 static DEVICE_ATTR(plusone_threshold, 0664, plusone_threshold_show,
 		plusone_threshold_store);
 static DEVICE_ATTR(plustwo_threshold, 0664, plustwo_threshold_show,
@@ -409,6 +441,7 @@ static DEVICE_ATTR(timer, 0664, timer_show, timer_store);
 
 static struct attribute *ele_plug_control_attributes[] = {
 	&dev_attr_enabled.attr,
+	&dev_attr_alive_threshold.attr,
 	&dev_attr_plusone_threshold.attr,
 	&dev_attr_plustwo_threshold.attr,
 	&dev_attr_plusthree_threshold.attr,
@@ -446,6 +479,7 @@ static int ele_plug_probe(struct platform_device *pdev)
 	}
 
 	t->enabled = ELE_PLUG_ENABLED;
+	t->alive_threshold = DEFAULT_ALIVE_THRESHOLD;
 	t->plusone_threshold = DEFAULT_PLUSONE_THRESHOLD;
 	t->plustwo_threshold = DEFAULT_PLUSTWO_THRESHOLD;
 	t->plusthree_threshold = DEFAULT_PLUSTHREE_THRESHOLD;
@@ -469,7 +503,7 @@ static int ele_plug_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&decide_hotplug, decide_hotplug_func);
 
 	if (t->enabled)
-		queue_delayed_work(wq, &decide_hotplug, HZ * 30);
+		queue_delayed_work(wq, &decide_hotplug, HZ);
 err:
 	return ret;
 }
