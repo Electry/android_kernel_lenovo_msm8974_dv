@@ -448,9 +448,9 @@ int calculate_report_soc(struct bq27x00_device_info *di)
 		if(di->cache.voltage <= 3300){
 			if(low_vol_start_time > 0){
 				low_vol_delta_time = now_tm_sec - low_vol_start_time;
-				dev_info(di->dev,"low_vol_delta_time=%d,low_vol_start_time=%ld.\n",low_vol_delta_time,low_vol_start_time);
+				pr_debug("low_vol_delta_time=%d,low_vol_start_time=%ld.\n",low_vol_delta_time,low_vol_start_time);
 				if(low_vol_delta_time > 60){
-					dev_info(di->dev,"report cap=1 for low voltage,cache_cap=%d.\n",di->cache.capacity);
+					pr_debug("report cap=1 for low voltage,cache_cap=%d.\n",di->cache.capacity);
 					di->cache.capacity = 1;
 				}
 			}else{
@@ -463,13 +463,13 @@ int calculate_report_soc(struct bq27x00_device_info *di)
 		if(di->cache.capacity <= 1){
 			if(di->cache.voltage <= 3300 || (di->cache.flags&0x2) == 0x2){
 				di->cache.capacity = 1;
-				dev_info(di->dev,"report cap=1.\n");
+				pr_debug("report cap=1.\n");
 			}else{
 				if(last_report_soc > 2)
 					di->cache.capacity = last_report_soc-1;
 				else
 					di->cache.capacity = last_report_soc;
-				dev_info(di->dev,"availabe remain capcity,report cap=%d.\n",last_report_soc);
+				pr_debug("availabe remain capcity,report cap=%d.\n",last_report_soc);
 			}
 		}else{
 			if(wake_lock_active(&di->lowcap_wakelock))
@@ -686,10 +686,10 @@ static int bq27x00_battery_read_temp(struct bq27x00_device_info *di)
 	}else if(temp - 2731 >= 580){
 		htemp_cnt++;
 		if(htemp_cnt <= 3){
-			dev_info(di->dev,"High temp detect %dC %d times!\n",temp,htemp_cnt);
+			pr_err("bq27x00_battery: High temp detect %dC %d times!\n",temp,htemp_cnt);
 			temp = temp_prev;
 		}else{
-			dev_info(di->dev,"High temp detect:%dC %d times,report it!\n",temp,htemp_cnt);
+			pr_err("bq27x00_battery: High temp detect:%dC %d times,report it!\n",temp,htemp_cnt);
 			temp_prev = temp;
 			htemp_cnt = 0;
 		}
@@ -736,10 +736,10 @@ static int bq27x00_battery_read_rsoc(struct bq27x00_device_info *di)
 	}else{
 		if(rd_count >= 9){
 			rd_count = 0;
-			dev_info(di->dev,"Low soc %d detect!\n",rsoc);
+			pr_info("bq27x00_battery: Low soc %d detect!\n",rsoc);
 		}else{
 			rd_count++;
-			dev_info(di->dev,"Low soc %d prev %d loop %d!\n",rsoc,soc_prev,rd_count);
+			pr_info("bq27x00_battery: Low soc %d prev %d loop %d!\n",rsoc,soc_prev,rd_count);
 			rsoc = soc_prev;
 		}
 	}
@@ -911,9 +911,9 @@ static void fg_reg_show(struct bq27x00_device_info *di)
 	chrg_volt = bq27x00_read(di, BQ24192_REG_VOLT_4,true);
 	status = bq27x00_read(di, BQ24192_REG8_STATUS, true);//0x7d
 	chrg_fault = bq27x00_read(di, BQ24192_REG9_FAULT,true);//0x7e
-	dev_info(di->dev,"charger chrg_status=0x%x,ctrl=0x%x,chrg_por=0x%x,curr=0x%x,volt=0x%x,status=0x%x,fault=0x%x.\n",
+	pr_debug("charger chrg_status=0x%x,ctrl=0x%x,chrg_por=0x%x,curr=0x%x,volt=0x%x,status=0x%x,fault=0x%x.\n",
 		chg_status,ctrl,chrg_por,current_chg,chrg_volt,status,chrg_fault);
-	dev_info(di->dev,"nac=0x%x,fac=0x%x,rcuf=0x%x,rcf=0x%x,fccu=0x%x,fccf=0x%x.\n soc=%d,flags=0x%x,tc=0x%x,temp=%d,current_now=%d,voltage=%d.\n",
+	pr_debug("nac=0x%x,fac=0x%x,rcuf=0x%x,rcf=0x%x,fccu=0x%x,fccf=0x%x.\n soc=%d,flags=0x%x,tc=0x%x,temp=%d,current_now=%d,voltage=%d.\n",
 					nac,fac,rcuf,rcf,fccu,fccf,soc,flags,tc,temp,current_now,voltage);
 }
 
@@ -947,7 +947,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 	}
 
 	di->last_update = jiffies;
-	dev_info(di->dev, "usb_p=%d,host_m=%d,chg_t=%d,cap=%d,temp=%d,curr=%d,vol=%d,flag=0x%x,cl=%d\n",
+	pr_debug("usb_p=%d,host_m=%d,chg_t=%d,cap=%d,temp=%d,curr=%d,vol=%d,flag=0x%x,cl=%d\n",
 			di->usb_present,di->host_mode,di->chrg_type,cache.capacity,(cache.temperature - 2731),
 			(int)((s16)cache.current_now),cache.voltage,cache.flags,
 			di->board->chg_current);
@@ -981,7 +981,7 @@ static void bq27x00_battery_poll(struct work_struct *work)
 	struct bq27x00_device_info *di =
 		container_of(work, struct bq27x00_device_info, work.work);
 
-	dev_info(di->dev, "fg event worker\n");
+	pr_debug("fg event worker\n");
 
 	vbus_state = bq24192_get_vbus_state(di);
 	if(!vbus_state || di->cache.voltage < 3500){
@@ -1012,7 +1012,7 @@ static void bq27x00_battery_poll(struct work_struct *work)
 		}
 	}
 
-	dev_info(di->dev, "%s:chg_en=%d,chg-type=%d,mains_online=%d,usb_online=%d,usb_ovp=%d,chg_st=%d.\n",
+	pr_debug("%s:chg_en=%d,chg-type=%d,mains_online=%d,usb_online=%d,usb_ovp=%d,chg_st=%d.\n",
 		__func__,di->board->chg_en_flag,di->chrg_type,di->mains_online,di->usb_online,di->usb_ovp,di->chg_state);
 	if(di->mains_online || di->usb_online || (di->usb_ovp == USBIN_OVP)){//usb present
 		schedule_delayed_work(&di->work, msecs_to_jiffies(delay_t));//30s
@@ -1159,10 +1159,10 @@ static irqreturn_t charge_irq(int irq, void *devid)
 	int chrg_fault = 0;
 	int chrg_status = 0;
 	struct bq27x00_device_info *di = (struct bq27x00_device_info *)devid;
-	dev_info(di->dev, "CHARGER ISR\n");
+	pr_debug("CHARGER ISR\n");
 	chrg_fault = bq27x00_read(di, BQ24192_REG9_FAULT,true);
 	chrg_status = bq27x00_read(di, BQ24192_REG8_STATUS, true);
-	dev_info(di->dev,"Chrg fault=0x%x,status=0x%x.\n",chrg_fault,chrg_status);
+	pr_debug("Chrg fault=0x%x,status=0x%x.\n",chrg_fault,chrg_status);
 	if (!wake_lock_active(&di->wakelock))
 		wake_lock(&di->wakelock);
 	__cancel_delayed_work(&di->work);
@@ -1181,7 +1181,7 @@ static irqreturn_t fg_irq(int irq, void *devid)
 static irqreturn_t fg_thread_handler(int irq, void *devid)
 {
 	struct bq27x00_device_info *di = (struct bq27x00_device_info *)devid;
-	dev_info(di->dev, "FG ISR\n");
+	pr_debug("FG ISR\n");
 	if (!wake_lock_active(&di->wakelock))
 		wake_lock(&di->wakelock);
 	__cancel_delayed_work(&di->work);
@@ -1562,7 +1562,7 @@ int firmware_write(struct bq27x00_device_info *di)
 		pr_err("%s:chg_pn %d,use default.\n",__func__,di->chg_pn);
 	}
 	
-	dev_info(di->dev, "bq27530 %s:chg_pn %d,bqfs_size=%d\n", __func__,di->chg_pn,bqfs_size);
+	pr_debug("bq27530 %s:chg_pn %d,bqfs_size=%d\n", __func__,di->chg_pn,bqfs_size);
 
 	for(retry=0;retry<3;retry++){
 		data[0]=0x00;
@@ -1697,7 +1697,7 @@ static int fg_reboot_notifier_call(struct notifier_block *notifier,
 	if(bqdi->fg_irq_n)
 		free_irq(bqdi->fg_irq_n, bqdi);
 
-	dev_info(bqdi->dev, "%s: The delay work and ISR was released for FG\n",__func__);
+	pr_debug("%s: The delay work and ISR was released for FG\n",__func__);
 
 	return NOTIFY_DONE;
 
