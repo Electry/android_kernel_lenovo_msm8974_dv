@@ -3,3 +3,11 @@ config INTELLI_PLUG
         default n
         help
           Generic Intelli-plug cpu hotplug driver for ARM SOCs
+
+config ELE_PLUG
+        bool "Enable Ele-Plug cpu hotplug driver"
+        default y
+        help
+          Ele-Plug cpu hotplug driver for Symmetric Multiprocessor SoCs.
+          YES. Another hotplug. This is the shittiest ever made.
+          Developed by Electry.
