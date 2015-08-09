@@ -30,18 +30,17 @@
 
 #define ELE_PLUG			"ele_plug"
 #define ELE_PLUG_MAJOR_VERSION		1
-#define ELE_PLUG_MINOR_VERSION		1
+#define ELE_PLUG_MINOR_VERSION		2
 
 #define ELE_PLUG_ENABLED		1
 #undef ELE_PLUG_DEBUG
 
 #define DEFAULT_ALIVE_THRESHOLD		10
-#define DEFAULT_PLUSONE_THRESHOLD	25
-#define DEFAULT_PLUSTWO_THRESHOLD	50
-#define DEFAULT_PLUSTHREE_THRESHOLD	80
+#define DEFAULT_LOAD_THRESHOLD		20
+#define DEFAULT_SPIKE_THRESHOLD		70
 
 #define DEFAULT_CPUFREQ_UNPLUG_LIMIT	1800000
-#define DEFAULT_MIN_CPU_ONLINE_COUNTER	10
+#define DEFAULT_MIN_CPU_ONLINE_COUNTER	8
 
 /* Careful with this value */
 #define DEFAULT_TIMER			250
@@ -70,19 +69,13 @@ struct hotplug_tunables {
 	 * system load threshold to decide when online or offline one core
 	 * (from 0 to 100)
 	 */
-	unsigned int plusone_threshold;
+	unsigned int load_threshold;
 
 	/*
-	 * system load threshold to decide when online two cores at once
+	 * system load threshold to decide when online all cores at once
 	 * (from 0 to 100)
 	 */
-	unsigned int plustwo_threshold;
-
-	/*
-	 * system load threshold to decide when online three cores at once
-	 * (from 0 to 100)
-	 */
-	unsigned int plusthree_threshold;
+	unsigned int spike_threshold;
 
 	/*
 	 * minimum time in samples that cores have to stay online before they
@@ -97,7 +90,7 @@ struct hotplug_tunables {
 	unsigned int cpufreq_unplug_limit;
 
 	/*
-	 * sample timer in miliseconds. The default value of 250 equals to 4
+	 * sample timer in milliseconds. The default value of 250 equals to 4
 	 * samples every second. The higher the value the less samples
 	 * per second it runs
 	 */
@@ -191,28 +184,28 @@ static void __ref decide_hotplug_func(struct work_struct *work)
 	pr_info("%s: LOAD %d, ACTIVE CORES %d, COUNTER %d\n", ELE_PLUG, cur_load, online_cpus, stats.counter);
 #endif
 
-	if (cur_load >= t->plusthree_threshold) {
+	if (cur_load >= t->spike_threshold) {
+		/* Plug all cores */
 		if (online_cpus < 4)
 			cpu_plug(3);
 
-	} else if (cur_load >= t->plustwo_threshold) {
-		if (online_cpus < 4)
-			cpu_plug(2);
-
-	} else if (cur_load >= t->plusone_threshold) {
+	} else if (cur_load >= t->load_threshold) {
+		/* Plug one more core */
 		if (online_cpus < 4)
 			cpu_plug(1);
 
-	} else if (cur_load < t->alive_threshold) {
-		if (online_cpus > 1 && !cpus_freq_overlimit() && stats.counter > t->min_cpu_online_counter) {
-			if (online_cpus <= 2) //Last unplug -> reset counter
+	} else if (cur_load < t->alive_threshold
+		   && online_cpus > 1
+		   && !cpus_freq_overlimit()
+		   && stats.counter > t->min_cpu_online_counter) {
+
+			if (online_cpus < 3) //Last unplug possible -> reset counter
 				stats.counter = 0;
 
 			cpu_unplug(1);
-		}
 	}
 
-	if (t->enabled)
+	if (likely(t->enabled))
 		queue_delayed_work(wq, &decide_hotplug,
 			msecs_to_jiffies(t->timer));
 
@@ -279,15 +272,15 @@ static ssize_t alive_threshold_store(struct device *dev,
 	return size;
 }
 
-static ssize_t plusone_threshold_show(struct device *dev,
+static ssize_t load_threshold_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct hotplug_tunables *t = &tunables;
 
-	return snprintf(buf, 10, "%u\n", t->plusone_threshold);
+	return snprintf(buf, 10, "%u\n", t->load_threshold);
 }
 
-static ssize_t plusone_threshold_store(struct device *dev,
+static ssize_t load_threshold_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	struct hotplug_tunables *t = &tunables;
@@ -298,20 +291,20 @@ static ssize_t plusone_threshold_store(struct device *dev,
 	if (ret < 0)
 		return ret;
 
-	t->plusone_threshold = new_val > 100 ? 100 : new_val;
+	t->load_threshold = new_val > 100 ? 100 : new_val;
 
 	return size;
 }
 
-static ssize_t plustwo_threshold_show(struct device *dev,
+static ssize_t spike_threshold_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct hotplug_tunables *t = &tunables;
 
-	return snprintf(buf, 10, "%u\n", t->plustwo_threshold);
+	return snprintf(buf, 10, "%u\n", t->spike_threshold);
 }
 
-static ssize_t plustwo_threshold_store(struct device *dev,
+static ssize_t spike_threshold_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	struct hotplug_tunables *t = &tunables;
@@ -322,31 +315,7 @@ static ssize_t plustwo_threshold_store(struct device *dev,
 	if (ret < 0)
 		return ret;
 
-	t->plustwo_threshold = new_val > 100 ? 100 : new_val;
-
-	return size;
-}
-
-static ssize_t plusthree_threshold_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct hotplug_tunables *t = &tunables;
-
-	return snprintf(buf, 10, "%u\n", t->plusthree_threshold);
-}
-
-static ssize_t plusthree_threshold_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	struct hotplug_tunables *t = &tunables;
-	int ret;
-	unsigned long new_val;
-
-	ret = kstrtoul(buf, 0, &new_val);
-	if (ret < 0)
-		return ret;
-
-	t->plusthree_threshold = new_val > 100 ? 100 : new_val;
+	t->spike_threshold = new_val > 100 ? 100 : new_val;
 
 	return size;
 }
@@ -427,12 +396,10 @@ static ssize_t timer_store(struct device *dev, struct device_attribute *attr,
 static DEVICE_ATTR(enabled, 0664, enabled_show, enabled_store);
 static DEVICE_ATTR(alive_threshold, 0664, alive_threshold_show,
 		alive_threshold_store);
-static DEVICE_ATTR(plusone_threshold, 0664, plusone_threshold_show,
-		plusone_threshold_store);
-static DEVICE_ATTR(plustwo_threshold, 0664, plustwo_threshold_show,
-		plustwo_threshold_store);
-static DEVICE_ATTR(plusthree_threshold, 0664, plusthree_threshold_show,
-		plusthree_threshold_store);
+static DEVICE_ATTR(load_threshold, 0664, load_threshold_show,
+		load_threshold_store);
+static DEVICE_ATTR(spike_threshold, 0664, spike_threshold_show,
+		spike_threshold_store);
 static DEVICE_ATTR(min_cpu_online_counter, 0664, min_cpu_online_counter_show,
 		min_cpu_online_counter_store);
 static DEVICE_ATTR(cpufreq_unplug_limit, 0664, cpufreq_unplug_limit_show,
@@ -442,9 +409,8 @@ static DEVICE_ATTR(timer, 0664, timer_show, timer_store);
 static struct attribute *ele_plug_control_attributes[] = {
 	&dev_attr_enabled.attr,
 	&dev_attr_alive_threshold.attr,
-	&dev_attr_plusone_threshold.attr,
-	&dev_attr_plustwo_threshold.attr,
-	&dev_attr_plusthree_threshold.attr,
+	&dev_attr_load_threshold.attr,
+	&dev_attr_spike_threshold.attr,
 	&dev_attr_min_cpu_online_counter.attr,
 	&dev_attr_cpufreq_unplug_limit.attr,
 	&dev_attr_timer.attr,
@@ -457,7 +423,7 @@ static struct attribute_group ele_plug_control_group = {
 
 static struct miscdevice ele_plug_control_device = {
 	.minor = MISC_DYNAMIC_MINOR,
-	.name = "ele_plug_control",
+	.name = "ele-plug_control",
 };
 
 /*
@@ -480,9 +446,8 @@ static int ele_plug_probe(struct platform_device *pdev)
 
 	t->enabled = ELE_PLUG_ENABLED;
 	t->alive_threshold = DEFAULT_ALIVE_THRESHOLD;
-	t->plusone_threshold = DEFAULT_PLUSONE_THRESHOLD;
-	t->plustwo_threshold = DEFAULT_PLUSTWO_THRESHOLD;
-	t->plusthree_threshold = DEFAULT_PLUSTHREE_THRESHOLD;
+	t->load_threshold = DEFAULT_LOAD_THRESHOLD;
+	t->spike_threshold = DEFAULT_SPIKE_THRESHOLD;
 	t->min_cpu_online_counter = DEFAULT_MIN_CPU_ONLINE_COUNTER;
 	t->cpufreq_unplug_limit = DEFAULT_CPUFREQ_UNPLUG_LIMIT;
 	t->timer = DEFAULT_TIMER;
