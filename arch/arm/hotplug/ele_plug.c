@@ -30,7 +30,7 @@
 
 #define ELE_PLUG			"ele_plug"
 #define ELE_PLUG_MAJOR_VERSION		1
-#define ELE_PLUG_MINOR_VERSION		2
+#define ELE_PLUG_MINOR_VERSION		3
 
 #define ELE_PLUG_ENABLED		1
 #undef ELE_PLUG_DEBUG
@@ -38,6 +38,7 @@
 #define DEFAULT_ALIVE_THRESHOLD		10
 #define DEFAULT_LOAD_THRESHOLD		20
 #define DEFAULT_SPIKE_THRESHOLD		70
+#define DEFAULT_MAX_CORES		4
 
 #define DEFAULT_CPUFREQ_UNPLUG_LIMIT	1800000
 #define DEFAULT_MIN_CPU_ONLINE_COUNTER	8
@@ -90,6 +91,11 @@ struct hotplug_tunables {
 	unsigned int cpufreq_unplug_limit;
 
 	/*
+	 * Number of maximum cores online
+	 */
+	unsigned int max_cores;
+
+	/*
 	 * sample timer in milliseconds. The default value of 250 equals to 4
 	 * samples every second. The higher the value the less samples
 	 * per second it runs
@@ -106,12 +112,13 @@ static struct delayed_work decide_hotplug;
 static void __cpuinit cpu_plug(unsigned int x)
 {
 	unsigned int cpu;
+	struct hotplug_tunables *t = &tunables;
 
 #ifdef ELE_PLUG_DEBUG
 	pr_info("%s: onlining %d cores\n", ELE_PLUG, x);
 #endif
 
-	for (cpu = 1; cpu < 4; cpu++) {
+	for (cpu = 1; cpu < t->max_cores; cpu++) {
 		if (cpu_is_offline(cpu)) {
 			cpu_up(cpu);
 			x--;
@@ -128,12 +135,13 @@ static void __cpuinit cpu_plug(unsigned int x)
 static void __cpuinit cpu_unplug(unsigned int x)
 {
 	unsigned int cpu;
+	struct hotplug_tunables *t = &tunables;
 
 #ifdef ELE_PLUG_DEBUG
 	pr_info("%s: offlining %d cores\n", ELE_PLUG, x);
 #endif
 
-	for (cpu = 3; cpu > 0; cpu--) {
+	for (cpu = t->max_cores-1; cpu > 0; cpu--) {
 		if (cpu_online(cpu)) {
 			cpu_down(cpu);
 			x--;
@@ -160,10 +168,10 @@ static inline bool cpus_freq_overlimit(void)
 			return false;
 	}
 
-	for (cpu = 1; cpu < 4; cpu++)
+	for (cpu = 1; cpu < t->max_cores; cpu++)
 		current_freq += cpufreq_quick_get(cpu);
 
-	current_freq /= 3;
+	current_freq /= t->max_cores-1;
 
 	return current_freq >= t->cpufreq_unplug_limit;
 }
@@ -186,12 +194,12 @@ static void __ref decide_hotplug_func(struct work_struct *work)
 
 	if (cur_load >= t->spike_threshold) {
 		/* Plug all cores */
-		if (online_cpus < 4)
-			cpu_plug(3);
+		if (online_cpus < t->max_cores)
+			cpu_plug(t->max_cores-1);
 
 	} else if (cur_load >= t->load_threshold) {
 		/* Plug one more core */
-		if (online_cpus < 4)
+		if (online_cpus < t->max_cores)
 			cpu_plug(1);
 
 	} else if (cur_load < t->alive_threshold
@@ -199,7 +207,7 @@ static void __ref decide_hotplug_func(struct work_struct *work)
 		   && !cpus_freq_overlimit()
 		   && stats.counter > t->min_cpu_online_counter) {
 
-			if (online_cpus < 3) //Last unplug possible -> reset counter
+			if (online_cpus < 3) //Last unplug possible (online == 2 [1 after this unplug]) -> reset counter
 				stats.counter = 0;
 
 			cpu_unplug(1);
@@ -369,6 +377,35 @@ static ssize_t cpufreq_unplug_limit_store(struct device *dev,
 	return size;
 }
 
+static ssize_t max_cores_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct hotplug_tunables *t = &tunables;
+
+	return snprintf(buf, 10, "%u\n", t->max_cores);
+}
+
+static ssize_t max_cores_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct hotplug_tunables *t = &tunables;
+	int ret;
+	unsigned long new_val;
+
+	ret = kstrtoul(buf, 0, &new_val);
+	if (ret < 0)
+		return ret;
+
+	if (new_val > 4)
+		new_val = 4;
+	else if (new_val < 1)
+		new_val = 1;
+
+	t->max_cores = new_val;
+
+	return size;
+}
+
 static ssize_t timer_show(struct device *dev, struct device_attribute *attr,
 		char *buf)
 {
@@ -404,6 +441,8 @@ static DEVICE_ATTR(min_cpu_online_counter, 0664, min_cpu_online_counter_show,
 		min_cpu_online_counter_store);
 static DEVICE_ATTR(cpufreq_unplug_limit, 0664, cpufreq_unplug_limit_show,
 		cpufreq_unplug_limit_store);
+static DEVICE_ATTR(max_cores, 0664, max_cores_show,
+		max_cores_store);
 static DEVICE_ATTR(timer, 0664, timer_show, timer_store);
 
 static struct attribute *ele_plug_control_attributes[] = {
@@ -413,6 +452,7 @@ static struct attribute *ele_plug_control_attributes[] = {
 	&dev_attr_spike_threshold.attr,
 	&dev_attr_min_cpu_online_counter.attr,
 	&dev_attr_cpufreq_unplug_limit.attr,
+	&dev_attr_max_cores.attr,
 	&dev_attr_timer.attr,
 	NULL
 };
@@ -450,6 +490,7 @@ static int ele_plug_probe(struct platform_device *pdev)
 	t->spike_threshold = DEFAULT_SPIKE_THRESHOLD;
 	t->min_cpu_online_counter = DEFAULT_MIN_CPU_ONLINE_COUNTER;
 	t->cpufreq_unplug_limit = DEFAULT_CPUFREQ_UNPLUG_LIMIT;
+	t->max_cores = DEFAULT_MAX_CORES;
 	t->timer = DEFAULT_TIMER;
 
 	ret = misc_register(&ele_plug_control_device);
@@ -466,6 +507,9 @@ static int ele_plug_probe(struct platform_device *pdev)
 	}
 
 	INIT_DELAYED_WORK(&decide_hotplug, decide_hotplug_func);
+
+	if (t->max_cores < 4)
+		cpu_down(3); //Reset
 
 	if (t->enabled)
 		queue_delayed_work(wq, &decide_hotplug, HZ);
