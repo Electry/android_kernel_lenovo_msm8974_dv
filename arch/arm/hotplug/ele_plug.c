@@ -1,6 +1,14 @@
 /*
- * Copyright (c) 2013-2015, Francisco Franco <franciscofranco.1990@gmail.com>,
- *                    2015, Michal Chvíla aka Electry <electrydev@gmail.com>.
+ * arch/arm/hotplug/ele_plug.c
+ *
+ * Custom Hotplug driver for Quad-Core ARM Symmetric Multiprocessor SoCs
+ *
+ * Features:
+ * - CPU cores auto (un)plugging based on system load
+ * - WQ Suspension during screen-off state (only if CONFIG_FB)
+ * - Extensive sysfs tuneables
+ *
+ * Copyright (c) 2015, Michal Chvíla aka Electry <electrydev@gmail.com>.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -27,12 +35,17 @@
 #include <linux/delay.h>
 #include <linux/input.h>
 #include <linux/jiffies.h>
+#ifdef CONFIG_FB
+#include <linux/fb.h>
+#endif
 
 #define ELE_PLUG			"ele_plug"
 #define ELE_PLUG_MAJOR_VERSION		1
-#define ELE_PLUG_MINOR_VERSION		3
+#define ELE_PLUG_MINOR_VERSION		4
 
 #define ELE_PLUG_ENABLED		1
+
+//#define ELE_PLUG_DEBUG 1
 #undef ELE_PLUG_DEBUG
 
 #define DEFAULT_ALIVE_THRESHOLD		10
@@ -43,7 +56,6 @@
 #define DEFAULT_CPUFREQ_UNPLUG_LIMIT	1800000
 #define DEFAULT_MIN_CPU_ONLINE_COUNTER	8
 
-/* Careful with this value */
 #define DEFAULT_TIMER			250
 
 extern unsigned int get_rq_info(void);
@@ -103,8 +115,13 @@ struct hotplug_tunables {
 	unsigned int timer;
 } tunables;
 
+unsigned int hotplug_state = 1;
+
 static struct workqueue_struct *wq;
 static struct delayed_work decide_hotplug;
+#ifdef CONFIG_FB
+static struct notifier_block fb_notifier;
+#endif
 
 /*
  * Plug x cores (eg. cpu_plug(2) will online 2 cores (if possible) )
@@ -192,7 +209,12 @@ static void __ref decide_hotplug_func(struct work_struct *work)
 	pr_info("%s: LOAD %d, ACTIVE CORES %d, COUNTER %d\n", ELE_PLUG, cur_load, online_cpus, stats.counter);
 #endif
 
-	if (cur_load >= t->spike_threshold) {
+	if (unlikely(!hotplug_state)) {
+		/* Suspending, Unplug all cores */
+		cpu_unplug(3);
+		stats.counter = 0; //Reset
+
+	} else if (cur_load >= t->spike_threshold) {
 		/* Plug all cores */
 		if (online_cpus < t->max_cores)
 			cpu_plug(t->max_cores-1);
@@ -213,17 +235,72 @@ static void __ref decide_hotplug_func(struct work_struct *work)
 			cpu_unplug(1);
 	}
 
-	if (likely(t->enabled))
+	if (likely(t->enabled) && likely(hotplug_state))
 		queue_delayed_work(wq, &decide_hotplug,
 			msecs_to_jiffies(t->timer));
 
 	return;
 }
 
+static void hotplug_suspend(void)
+{
+	pr_info("%s: Screen off. Suspending.\n", ELE_PLUG);
+
+	/* Suspend hotplug state */
+	hotplug_state = 0;
+}
+
+static void hotplug_resume(void)
+{
+	pr_info("%s: Screen on. Resuming.\n", ELE_PLUG);
+
+	/* Resume hotplug state */
+	hotplug_state = 1;
+
+	/* Resume main work thread */
+	queue_delayed_work(wq, &decide_hotplug, 0);
+}
+
+
 /*
- * Sysfs get/set entries start
+ * Start of FrameBuffer handling
+ */
+#ifdef CONFIG_FB
+static int fb_notifier_callback(struct notifier_block *this,
+				unsigned long event, void *data)
+{
+	int blank_mode;
+
+	if (event != FB_EVENT_BLANK || data == NULL)
+		return 0;
+
+	blank_mode = *(int*)(((struct fb_event*)data)->data);
+
+#ifdef ELE_PLUG_DEBUG
+	pr_info("%s: FB_CB: event = %lu, blank mode = %d\n", ELE_PLUG, event, blank_mode);
+#endif
+
+	switch (blank_mode) {
+	case FB_BLANK_UNBLANK:
+		hotplug_resume();
+		break;
+	case FB_BLANK_POWERDOWN:
+		hotplug_suspend();
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+#endif
+/*
+ * End of FrameBuffer handling
  */
 
+/*
+ * Start of sysfs get/set entries
+ */
 static ssize_t enabled_show(struct device *dev, struct device_attribute *attr,
 		char *buf)
 {
@@ -463,11 +540,11 @@ static struct attribute_group ele_plug_control_group = {
 
 static struct miscdevice ele_plug_control_device = {
 	.minor = MISC_DYNAMIC_MINOR,
-	.name = "ele-plug_control",
+	.name = "ele_plug_control",
 };
 
 /*
- * Sysfs get/set entries end
+ * End of sysfs get/set entries
  */
 
 static int ele_plug_probe(struct platform_device *pdev)
@@ -508,11 +585,10 @@ static int ele_plug_probe(struct platform_device *pdev)
 
 	INIT_DELAYED_WORK(&decide_hotplug, decide_hotplug_func);
 
-	if (t->max_cores < 4)
+	if (t->enabled) {
 		cpu_down(3); //Reset
-
-	if (t->enabled)
-		queue_delayed_work(wq, &decide_hotplug, HZ);
+		queue_delayed_work(wq, &decide_hotplug, 0);
+	}
 err:
 	return ret;
 }
@@ -538,9 +614,18 @@ static struct platform_driver ele_plug_driver = {
 	},
 };
 
+/*
+ * Initialization
+ */
 static int __init ele_plug_init(void)
 {
 	int ret;
+
+	pr_info("%s: init\n", ELE_PLUG);
+	pr_info("%s: version %d.%d by Electry\n",
+		 ELE_PLUG,
+		 ELE_PLUG_MAJOR_VERSION,
+		 ELE_PLUG_MINOR_VERSION);
 
 	ret = platform_driver_register(&ele_plug_driver);
 	if (ret) {
@@ -554,17 +639,23 @@ static int __init ele_plug_init(void)
 		return ret;
 	}
 
-	pr_info("%s: init\n", ELE_PLUG);
-	pr_info("%s: version %d.%d by Electry\n",
-		 ELE_PLUG,
-		 ELE_PLUG_MAJOR_VERSION,
-		 ELE_PLUG_MINOR_VERSION);
+#ifdef CONFIG_FB
+	fb_notifier.notifier_call = fb_notifier_callback;
+	if (fb_register_client(&fb_notifier) != 0) {
+		pr_err("%s: FB callback register failed\n", ELE_PLUG);
+			return -EINVAL;
+	}
+#endif
+
+	pr_info("%s: init complete\n", ELE_PLUG);
 
 	return ret;
 }
 
 static void __exit ele_plug_exit(void)
 {
+	pr_info("%s: exiting\n", ELE_PLUG);
+
 	platform_device_unregister(&ele_plug_device);
 	platform_driver_unregister(&ele_plug_driver);
 }
@@ -573,5 +664,5 @@ late_initcall(ele_plug_init);
 module_exit(ele_plug_exit);
 
 MODULE_AUTHOR("Michal Chvíla aka Electry <electrydev@gmail.com>");
-MODULE_DESCRIPTION("Ele-Plug Hotplug Driver");
+MODULE_DESCRIPTION("Ele_Plug Hotplug Driver");
 MODULE_LICENSE("GPLv2");
