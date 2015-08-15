@@ -140,18 +140,26 @@ service qseecomd /system/bin/qseecomd
    group root
 
 #
-# MP-Decision disabled
+# MP-Decision (disabled here - also check /system/etc/init.qcom.post_boot.sh, 
+#              the mpdecision service is defaulty started there)
 #
-# service mpdecision /system/bin/mpdecision --avg_comp
-#    class main
-#    user root
-#    disabled
+service mpdecision /system/bin/mpdecision --avg_comp
+   class main
+   user root
+   disabled
 
 service qosmgrd /system/bin/qosmgr /system/etc/qosmgr_rules.xml
    user system
    group system
    disabled
 
+#
+# Thermal-Engine
+#
+# !!! CAREFUL if disabled !!!
+# Make sure your kernel is using VALID replacement, otherwise the device
+# might and will overheat, without ANY protection to shut it down
+#
 service thermal-engine /system/bin/thermal-engine
    class main
    user root
@@ -159,6 +167,7 @@ service thermal-engine /system/bin/thermal-engine
    socket thermal-recv-client stream 0660 system system
    socket thermal-recv-passive-client stream 0666 system system
    group root
+#   disabled
 
 service time_daemon /system/bin/time_daemon
    class late_start
