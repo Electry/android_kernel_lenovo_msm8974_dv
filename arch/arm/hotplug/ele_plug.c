@@ -8,7 +8,7 @@
  * - WQ Suspension during screen-off state (only if CONFIG_FB)
  * - Extensive sysfs tuneables
  *
- * Copyright (c) 2015, Michal Chvíla aka Electry <electrydev@gmail.com>.
+ * Copyright (c) 2015, Michal Chvila aka Electry <electrydev@gmail.com>.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -41,7 +41,7 @@
 
 #define ELE_PLUG			"ele_plug"
 #define ELE_PLUG_MAJOR_VERSION		1
-#define ELE_PLUG_MINOR_VERSION		4
+#define ELE_PLUG_MINOR_VERSION		5
 
 #define ELE_PLUG_ENABLED		1
 
@@ -171,7 +171,7 @@ static void __cpuinit cpu_unplug(unsigned int x)
 
 
 /*
- * Returns true if average of (1-3cores) freqs is >= than cpufreq_unplug_limit
+ * Returns true if average of (1-3cores) freqs is > than cpufreq_unplug_limit
  */
 static inline bool cpus_freq_overlimit(void)
 {
@@ -181,7 +181,7 @@ static inline bool cpus_freq_overlimit(void)
 	unsigned int cpu;
 
 	if (policy) {
-		if (policy->min >= t->cpufreq_unplug_limit)
+		if (policy->min > t->cpufreq_unplug_limit)
 			return false;
 	}
 
@@ -190,7 +190,7 @@ static inline bool cpus_freq_overlimit(void)
 
 	current_freq /= t->max_cores-1;
 
-	return current_freq >= t->cpufreq_unplug_limit;
+	return current_freq > t->cpufreq_unplug_limit;
 }
 
 static void __ref decide_hotplug_func(struct work_struct *work)
@@ -502,7 +502,7 @@ static ssize_t timer_store(struct device *dev, struct device_attribute *attr,
 	if (ret < 0)
 		return ret;
 
-	t->timer = new_val > 100 ? 100 : new_val;
+	t->timer = new_val > 2000 ? 2000 : new_val;
 
 	return size;
 }
