@@ -94,7 +94,7 @@ esac
 # MP-Decision by qcom
 #start mpdecision
 
-echo 512 > /sys/block/mmcblk0/bdi/read_ahead_kb
+echo 1024 > /sys/block/mmcblk0/bdi/read_ahead_kb
 
 # Let kernel know our image version/variant/crm_version
 image_version="10:"
