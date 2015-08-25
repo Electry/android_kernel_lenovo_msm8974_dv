@@ -8,7 +8,7 @@
  * - WQ Suspension during screen-off state (only if CONFIG_FB)
  * - Extensive sysfs tuneables
  *
- * Copyright (c) 2015, Michal Chvila aka Electry <electrydev@gmail.com>.
+ * Copyright (c) 2015, Michal Chvila (Electry) <electrydev@gmail.com>.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -22,18 +22,13 @@
  */
 
 #include <linux/module.h>
-#include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
-#include <linux/cpu.h>
-#include <linux/workqueue.h>
-#include <linux/sched.h>
 #include <linux/platform_device.h>
-#include <linux/timer.h>
+#include <linux/cpu.h>
 #include <linux/cpufreq.h>
-#include <linux/delay.h>
-#include <linux/input.h>
+#include <linux/workqueue.h>
 #include <linux/jiffies.h>
 #ifdef CONFIG_FB
 #include <linux/fb.h>
@@ -41,7 +36,7 @@
 
 #define ELE_PLUG			"ele_plug"
 #define ELE_PLUG_MAJOR_VERSION		1
-#define ELE_PLUG_MINOR_VERSION		5
+#define ELE_PLUG_MINOR_VERSION		6
 
 #define ELE_PLUG_ENABLED		1
 
@@ -54,7 +49,7 @@
 #define DEFAULT_MAX_CORES		4
 
 #define DEFAULT_CPUFREQ_UNPLUG_LIMIT	1800000
-#define DEFAULT_MIN_CPU_ONLINE_COUNTER	8
+#define DEFAULT_MIN_CPU_ONLINE_COUNTER	8 // [ticks] =2sec
 
 #define DEFAULT_TIMER			250
 
@@ -663,6 +658,6 @@ static void __exit ele_plug_exit(void)
 late_initcall(ele_plug_init);
 module_exit(ele_plug_exit);
 
-MODULE_AUTHOR("Michal Chvíla aka Electry <electrydev@gmail.com>");
+MODULE_AUTHOR("Michal Chvila (Electry) <electrydev@gmail.com>");
 MODULE_DESCRIPTION("Ele_Plug Hotplug Driver");
 MODULE_LICENSE("GPLv2");
