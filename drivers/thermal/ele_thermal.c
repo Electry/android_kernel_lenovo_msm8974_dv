@@ -9,7 +9,7 @@
  * - Emergency shutdown on device overheat (default 100C)
  * - Extensive sysfs tuneables
  *
- * Copyright (c) 2015, Michal Chvila aka Electry <electrydev@gmail.com>.
+ * Copyright (c) 2015, Michal Chvila (Electry) <electrydev@gmail.com>.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -23,13 +23,11 @@
  */
 
 #include <linux/module.h>
-#include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
-#include <linux/workqueue.h>
-#include <linux/timer.h>
 #include <linux/platform_device.h>
+#include <linux/workqueue.h>
 #include <linux/cpu.h>
 #include <linux/cpufreq.h>
 #include <linux/msm_tsens.h>
@@ -37,7 +35,7 @@
 
 #define ELE_THERMAL			"ele_thermal"
 #define ELE_THERMAL_MAJOR_VERSION	1
-#define ELE_THERMAL_MINOR_VERSION	0
+#define ELE_THERMAL_MINOR_VERSION	1
 
 #define ELE_THERMAL_ENABLED		1
 
@@ -49,16 +47,16 @@
 #define DEFAULT_TEMP_HYSTERESIS		5
 #define DEFAULT_FREQ_STEPDOWN		1
 #define DEFAULT_FREQ_STEPUP		1
-#define DEFAULT_FREQ_LAZY		2 //0.5sec
+#define DEFAULT_FREQ_LAZY		2 // [ticks] =0.5sec
 
-unsigned int thermal_zones[4] = { 5, 6, 7, 8 };
+uint32_t thermal_zones[4] = { 5, 6, 7, 8 };
 
 unsigned int thermal_min_freq_id = 8;
 
 unsigned int thermal_temp_shutdown = 100;
 
 /* Spent time-in-temp monitoring */
-//unsigned int monitor_temp_start = 0;
+//int monitor_temp_start = 0;
 //unsigned int monitor_temp_count = 99;
 
 struct thermal_tunables {
@@ -151,7 +149,7 @@ static int thermal_get_cpu_temp(uint32_t cpu_zones[4])
 }
 
 /*
- * Read and store frequency table (called in _probe)
+ * Read and store frequency table
  */
 static int thermal_get_freq_table(void)
 {
@@ -365,7 +363,10 @@ static void __ref thermal_tick_func(struct work_struct *work)
 			thermal_shutdown_now(temp);
 
 			break;
-		default: break;
+		case STATE_KEEP:
+			cpu_info.lazy_counter = 0; //reset
+
+			break;
 
 	}
 
@@ -739,6 +740,6 @@ static int __init ele_thermal_init(void)
 
 late_initcall(ele_thermal_init);
 
-MODULE_AUTHOR("Michal Chvíla aka Electry <electrydev@gmail.com>");
+MODULE_AUTHOR("Michal Chvila (Electry) <electrydev@gmail.com>");
 MODULE_DESCRIPTION("Ele_Thermal Throttling Driver");
 MODULE_LICENSE("GPLv2");
